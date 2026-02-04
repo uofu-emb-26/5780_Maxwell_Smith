@@ -14,6 +14,7 @@ int main(void)
 {
   uint32_t moder_mask;
   uint32_t moder_expect;
+  uint32_t otyper_mask;
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
   /* Configure the system clock */
@@ -27,9 +28,13 @@ int main(void)
 
 
   HAL_GPIO_Init(GPIOC, &initStr);
+
   moder_mask = (3u << 16u | 3u << 18u);
   moder_expect = (1u << 16u | 1u << 18u);
-  //assert((GPIOC->MODER & moder_mask) == moder_expect);
+  assert((GPIOC->MODER & moder_mask) == moder_expect);
+
+  otyper_mask = ((1u << 8u) | (1u << 9u));
+  assert((GPIOC->OTYPER & otyper_mask) == 0u);
 
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
   while (1)
