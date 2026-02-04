@@ -18,6 +18,8 @@ int main(void)
   uint32_t ospeedr_mask;
   uint32_t pupdr_mask;
 
+  uint32_t old_odr;
+
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
@@ -53,8 +55,11 @@ int main(void)
   while (1)
   {
     HAL_Delay(200); // Delay 200ms
+
+    old_odr = GPIOC->ODR;
     // Toggle the output state of both PC8 and PC9
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8 | GPIO_PIN_9);
+    assert(((GPIOC->ODR ^ old_odr) & (GPIO_PIN_8 | GPIO_PIN_9)) == (GPIO_PIN_8 | GPIO_PIN_9)); // ensure GPIOC->ODR is toggling as it should
   }
   return -1;
 }
