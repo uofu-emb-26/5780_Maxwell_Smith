@@ -1,6 +1,9 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
 
+#include "assert.h"
+
+
 void SystemClock_Config(void);
 
 /**
@@ -9,18 +12,25 @@ void SystemClock_Config(void);
  */
 int main(void)
 {
+  uint32_t moder_mask;
+  uint32_t moder_expect;
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
   /* Configure the system clock */
   SystemClock_Config();
 
   __HAL_RCC_GPIOC_CLK_ENABLE(); // Enable the GPIOC clock in the RCC
+  assert((RCC->AHBENR & (1u << 19)) != 0u); // IOPCEN bit-19 in AHBERN (14 offset to AHBERN)
 
   // Set up a configuration struct to pass to the initialization function
   GPIO_InitTypeDef initStr = {GPIO_PIN_8 | GPIO_PIN_9, GPIO_MODE_OUTPUT_PP, GPIO_SPEED_FREQ_LOW, GPIO_NOPULL};
 
 
   HAL_GPIO_Init(GPIOC, &initStr);
+  moder_mask = (3u << 16u | 3u << 18u);
+  moder_expect = (1u << 16u | 1u << 18u);
+  //assert((GPIOC->MODER & moder_mask) == moder_expect);
+
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
   while (1)
   {
@@ -90,5 +100,7 @@ void assert_failed(uint8_t *file, uint32_t line)
 {
   /* User can add their own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+     
+  printf("Wrong parameters value: file %s on line %d\r\n", file, line)
 }
 #endif /* USE_FULL_ASSERT */
