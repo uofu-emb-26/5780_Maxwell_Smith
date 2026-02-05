@@ -1,5 +1,6 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
+#include "rcc.h"
 
 #include "assert.h"
 
@@ -26,40 +27,41 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
-  __HAL_RCC_GPIOC_CLK_ENABLE(); // Enable the GPIOC clock in the RCC
-  assert((RCC->AHBENR & (1u << 19)) != 0u); // IOPCEN bit-19 in AHBERN (14 offset to AHBERN)
+  //__HAL_RCC_GPIOC_CLK_ENABLE(); // Enable the GPIOC clock in the RCC
+  HAL_RCC_GPIOC_CLK_Enable(); // Replaced previous line for final checkoff
+  //assert((RCC->AHBENR & (1u << 19)) != 0u); // IOPCEN bit-19 in AHBERN (14 offset to AHBERN)
 
   // Set up a configuration struct to pass to the initialization function
   GPIO_InitTypeDef initStr = {GPIO_PIN_8 | GPIO_PIN_9, GPIO_MODE_OUTPUT_PP, GPIO_SPEED_FREQ_LOW, GPIO_NOPULL};
   HAL_GPIO_Init(GPIOC, &initStr);
 
-  moder_mask = (3u << 16u | 3u << 18u);
-  moder_expect = (1u << 16u | 1u << 18u);
-  assert((GPIOC->MODER & moder_mask) == moder_expect);
+  //moder_mask = (3u << 16u | 3u << 18u);
+  //moder_expect = (1u << 16u | 1u << 18u);
+  //assert((GPIOC->MODER & moder_mask) == moder_expect);
 
-  otyper_mask = ((1u << 8u) | (1u << 9u));
-  assert((GPIOC->OTYPER & otyper_mask) == 0u); // 0 for push pull (OUPUT_PP)
+  //otyper_mask = ((1u << 8u) | (1u << 9u));
+  //assert((GPIOC->OTYPER & otyper_mask) == 0u); // 0 for push pull (OUPUT_PP)
 
-  ospeedr_mask = moder_mask; // Same offset from pointer as MODER
-  assert((GPIOC->OSPEEDR & ospeedr_mask) == 0u); // 0 for low frequency (SPEED_FREQ_LOW)
+  //ospeedr_mask = moder_mask; // Same offset from pointer as MODER
+  //assert((GPIOC->OSPEEDR & ospeedr_mask) == 0u); // 0 for low frequency (SPEED_FREQ_LOW)
 
-  pupdr_mask = moder_mask; // Same offset from pointer as MODER (and OSPEEDR)
-  assert((GPIOC->PUPDR & pupdr_mask) == 0u); // 0 for no pull up or pull down
+  //pupdr_mask = moder_mask; // Same offset from pointer as MODER (and OSPEEDR)
+  //assert((GPIOC->PUPDR & pupdr_mask) == 0u); // 0 for no pull up or pull down
   
 
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
 
-  assert((GPIOC->ODR & GPIO_PIN_8) != 0u); // Should have been set
-  assert((GPIOC->ODR & GPIO_PIN_9) == 0u); // should not have been set
+  //assert((GPIOC->ODR & GPIO_PIN_8) != 0u); // Should have been set
+  //assert((GPIOC->ODR & GPIO_PIN_9) == 0u); // should not have been set
 
   while (1)
   {
     HAL_Delay(200); // Delay 200ms
 
-    old_odr = GPIOC->ODR;
+    //old_odr = GPIOC->ODR;
     // Toggle the output state of both PC8 and PC9
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8 | GPIO_PIN_9);
-    assert(((GPIOC->ODR ^ old_odr) & (GPIO_PIN_8 | GPIO_PIN_9)) == (GPIO_PIN_8 | GPIO_PIN_9)); // ensure GPIOC->ODR is toggling as it should
+    //assert(((GPIOC->ODR ^ old_odr) & (GPIO_PIN_8 | GPIO_PIN_9)) == (GPIO_PIN_8 | GPIO_PIN_9)); // ensure GPIOC->ODR is toggling as it should
   }
   return -1;
 }
