@@ -32,7 +32,7 @@ int main(void)
 
   //__HAL_RCC_GPIOC_CLK_ENABLE(); // Enable the GPIOC clock in the RCC
   HAL_RCC_GPIOC_CLK_Enable(); // Enable clk for GPIOC
-  HAL_RCC_GPPIOA_CLK_Enable(); // Enable clk for GPIOA
+  HAL_RCC_GPIOA_CLK_Enable(); // Enable clk for GPIOA
 
   //assert((RCC->AHBENR & (1u << 19)) != 0u); // IOPCEN bit-19 in AHBERN (14 offset to AHBERN)
 
