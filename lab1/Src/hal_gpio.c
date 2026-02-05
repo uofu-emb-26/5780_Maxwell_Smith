@@ -8,7 +8,7 @@ void My_HAL_GPIO_Init(GPIO_TypeDef  *GPIOx, GPIO_InitTypeDef *GPIO_Init)
     uint32_t mask;
     uint32_t shift_amt;
 
-    uint32_t pins = GPIOx->PIN;
+    uint32_t pins = GPIO_Init.Pin;
 
     for (i = 0; i < 16u; i++){
         mask = (1u << i);
@@ -20,11 +20,11 @@ void My_HAL_GPIO_Init(GPIO_TypeDef  *GPIOx, GPIO_InitTypeDef *GPIO_Init)
 
         GPIOx->MODER &= ~(3u << shift_amt);
 
-        if (GPIO_Init->MODE == GPIO_MODE_OUTPUT_PP || GPIO_Init->MODE == GPIO_MODE_OUTPUT_OD){
+        if (GPIO_Init.MODE == GPIO_MODE_OUTPUT_PP || GPIO_Init.MODE == GPIO_MODE_OUTPUT_OD){
             GPIOx->MODER |= (1u << shift_amt);
         }
 
-        if (GPIO_Init->MODE == GPIO_MODE_OUTPUT_OD){
+        if (GPIO_Init.MODE == GPIO_MODE_OUTPUT_OD){
             GPIOx->OTYPER |= mask;
         }
         else {
@@ -32,7 +32,7 @@ void My_HAL_GPIO_Init(GPIO_TypeDef  *GPIOx, GPIO_InitTypeDef *GPIO_Init)
         }
 
         GPIOx->OSPEEDR &= ~(3u << shift_amt);
-        GPIOx->OSPEED |= ((GPIO_Init->Speed & 3u) << shift_amt);
+        GPIOx->OSPEEDR |= ((GPIO_Init->Speed & 3u) << shift_amt);
     }
 
     // uint32_t pin_mask;
@@ -92,7 +92,7 @@ void My_HAL_GPIO_WritePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, GPIO_PinState 
 
 void My_HAL_GPIO_TogglePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin)
 {
-    uint32_t pins = (uint32_t)GPIO_PIN;
+    uint32_t pins = (uint32_t)GPIO_Pin;
     uint32_t drive_high_mask = pins & ~(GPIOx->ODR);
     uint32_t drive_low_mask = pins & (GPIOx->ODR);
     GPIOx->BSRR = drive_high_mask | (drive_low_mask << 16u);
