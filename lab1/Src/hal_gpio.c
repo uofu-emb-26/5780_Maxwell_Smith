@@ -77,6 +77,14 @@ GPIO_PinState My_HAL_GPIO_ReadPin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin)
 
 void My_HAL_GPIO_WritePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, GPIO_PinState PinState)
 {
+    if (PinState != GPIO_PIN_SET)
+    {
+        GPIOx->BSRR = ((uint32_t)GPIO_Pin) << 16u;
+    }
+    else 
+    {
+        GPIOx->BSRR = (uint32_t)GPIO_Pin;
+    }
 
 }
 
@@ -84,6 +92,9 @@ void My_HAL_GPIO_WritePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, GPIO_PinState 
 
 void My_HAL_GPIO_TogglePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin)
 {
-
+    uint32_t pins = (uint32_t)GPIO_PIN;
+    uint32_t drive_high_mask = pins & ~(GPIOx->ODR);
+    uint32_t drive_low_mask = pins & (GPIOx->ODR);
+    GPIOx->BSRR = drive_high_mask | (drive_low_mask << 16u);
 }
 
