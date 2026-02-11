@@ -1,6 +1,7 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
 #include "hal_gpio.h"
+#include "assert.h"
 
 void SystemClock_Config(void);
 
@@ -16,6 +17,7 @@ int main(void)
   SystemClock_Config();
 
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
 
   GPIO_InitTypeDef gpio = {0};
   gpio.Pin = GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_9;
@@ -24,6 +26,13 @@ int main(void)
   gpio.Speed = GPIO_SPEED_FREQ_LOW;
   My_HAL_GPIO_Init(GPIOC, &gpio);
 
+  GPIO_InitTypeDef btn = {0};
+  btn.Pin = GPIO_PIN_0;
+  btn.Mode = GPIO_MODE_INPUT;
+  btn.Pull = GPIO_PULLDOWN;
+  btn.Speed = GPIO_SPEED_FREQ_LOW;
+  My_HAL_GPIO_Init(GPIOA, &btn);
+  
   //start with red off
   My_HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
   // no blue led
@@ -31,6 +40,10 @@ int main(void)
 
   // turn on green led
   My_HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
+
+  My_HAL_EXTI0_RisingEdge_Init();
+  assert((EXTI->IMR & (1u)) != 0u); // make sure EXTI0 is enabled
+  assert((EXTI->RTSR & (1u)) != 0u); // make sure EXTI0 is set to trigger on rising edge
 
   while (1)
   {

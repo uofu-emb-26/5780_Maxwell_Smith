@@ -102,3 +102,15 @@ void My_HAL_GPIO_TogglePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin)
     GPIOx->BSRR = drive_high_mask | (drive_low_mask << 16u);
 }
 
+void My_HAL_EXTI0_RisingEdge_Init(void)
+{
+    const uint32_t mask = 1u; // shifted left by 0
+
+    EXTI->IMR |= mask; // unmask EXTI0
+
+    EXTI->RTSR |= mask; // trigger on rising edge
+
+    EXTI->FTSR &= ~mask; // don't trigger on falling edge
+
+    EXTI->PR = mask; // clear pending bit for EXTI0
+}
