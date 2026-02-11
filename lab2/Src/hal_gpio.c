@@ -130,7 +130,7 @@ void EXTI0_1_IRQHandler(void)
     {
         My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8 | GPIO_PIN_9);
 
-        for (volatile int i = 0; i < 150000; i++)
+        for (volatile uint32_t i = 0; i < 150000; i++)
         {
             __NOP();
         }

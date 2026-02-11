@@ -45,6 +45,14 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   HAL_IncTick();
+
+  static uint32_t milisec = 0;
+  milisec++;
+
+  if((milisec % 200u) == 0u){
+    // toggle blue led every 200 ms
+    My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7);
+  }
 }
 
 /******************************************************************************/

@@ -55,9 +55,9 @@ int main(void)
   while (1)
   {
     // toggle red led
-    My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6);
-    HAL_Delay(450);
-    My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7);
+    //My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6);
+    //HAL_Delay(450);
+    //My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7);
   }
   return -1;
 }
