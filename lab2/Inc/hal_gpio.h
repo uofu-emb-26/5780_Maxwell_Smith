@@ -9,3 +9,4 @@ void My_HAL_GPIO_WritePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, GPIO_PinState 
 void My_HAL_GPIO_TogglePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 void My_HAL_EXTI0_RisingEdge_Init(void);
 void My_HAL_SYSCFG_EXTI0_PA0_Init(void);
+void EXTI0_1_IRQHandler(void);

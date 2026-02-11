@@ -123,3 +123,12 @@ void My_HAL_SYSCFG_EXTI0_PA0_Init(void)
     // 0x0 is the value to select PA0 for EXTI0, 
     // so we don't need to set any bits after clearing
 }
+
+void EXTI0_1_IRQHandler(void)
+{
+    if ((EXTI->PR & 1u)) // check if EXTI0 caused the interrupt
+    {
+        My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8 | GPIO_PIN_9);
+        EXTI->PR = 1u; // clear pending bit for EXTI0
+    }
+}

@@ -20,7 +20,7 @@ int main(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   GPIO_InitTypeDef gpio = {0};
-  gpio.Pin = GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_9;
+  gpio.Pin = GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9;
   gpio.Mode = GPIO_MODE_OUTPUT_PP;
   gpio.Pull = GPIO_NOPULL;
   gpio.Speed = GPIO_SPEED_FREQ_LOW;
@@ -38,7 +38,8 @@ int main(void)
   // no blue led
   My_HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
 
-  // turn on green led
+  //start with orange led off and green led on
+  My_HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);
   My_HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
 
   My_HAL_EXTI0_RisingEdge_Init();
@@ -56,6 +57,7 @@ int main(void)
     // toggle red led
     My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6);
     HAL_Delay(450);
+    My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7);
   }
   return -1;
 }
