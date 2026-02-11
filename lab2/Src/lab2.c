@@ -32,7 +32,7 @@ int main(void)
   btn.Pull = GPIO_PULLDOWN;
   btn.Speed = GPIO_SPEED_FREQ_LOW;
   My_HAL_GPIO_Init(GPIOA, &btn);
-  
+
   //start with red off
   My_HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
   // no blue led
@@ -44,6 +44,9 @@ int main(void)
   My_HAL_EXTI0_RisingEdge_Init();
   assert((EXTI->IMR & (1u)) != 0u); // make sure EXTI0 is enabled
   assert((EXTI->RTSR & (1u)) != 0u); // make sure EXTI0 is set to trigger on rising edge
+
+  My_HAL_SYSCFG_EXTI0_PA0_Init();
+  assert((SYSCFG->EXTICR[0] & 0xFu) == 0u); // make sure EXTI0 is connected to PA0
 
   while (1)
   {

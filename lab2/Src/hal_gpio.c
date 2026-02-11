@@ -114,3 +114,12 @@ void My_HAL_EXTI0_RisingEdge_Init(void)
 
     EXTI->PR = mask; // clear pending bit for EXTI0
 }
+
+void My_HAL_SYSCFG_EXTI0_PA0_Init(void)
+{
+    __HAL_RCC_SYSCFG_CLK_ENABLE();
+
+    SYSCFG->EXTICR[0] &= ~0xFu; // clear EXTI0 bits
+    // 0x0 is the value to select PA0 for EXTI0, 
+    // so we don't need to set any bits after clearing
+}
