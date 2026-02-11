@@ -130,12 +130,12 @@ void EXTI0_1_IRQHandler(void)
     {
         My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8 | GPIO_PIN_9);
 
-        for (volatile uint32_t i = 0; i < 150000; i++)
+        for (volatile uint32_t i = 0; i < 150000u; i++)
         {
             __NOP();
         }
 
-        My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8 | GPIO_PIN_9);
+        //My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8 | GPIO_PIN_9);
 
         EXTI->PR = 1u; // clear pending bit for EXTI0
     }

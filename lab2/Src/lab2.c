@@ -3,6 +3,8 @@
 #include "hal_gpio.h"
 #include "assert.h"
 
+#define DEMO 1
+
 void SystemClock_Config(void);
 
 /**
@@ -49,15 +51,21 @@ int main(void)
   My_HAL_SYSCFG_EXTI0_PA0_Init();
   assert((SYSCFG->EXTICR[0] & 0xFu) == 0u); // make sure EXTI0 is connected to PA0
 
-  NVIC_SetPriority(EXTI0_1_IRQn, 1);
+  NVIC_SetPriority(SysTick_IRQn, 2);
+
+  #if DEMO
+    NVIC_SetPriority(EXTI0_1_IRQn, 1);
+  #else
+  NVIC_SetPriority(EXTI0_1_IRQn, 3);
+  #endif
+
   NVIC_EnableIRQ(EXTI0_1_IRQn);
 
   while (1)
   {
     // toggle red led
-    //My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6);
-    //HAL_Delay(450);
-    //My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7);
+    My_HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6);
+    HAL_Delay(450);
   }
   return -1;
 }
