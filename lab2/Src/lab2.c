@@ -48,6 +48,9 @@ int main(void)
   My_HAL_SYSCFG_EXTI0_PA0_Init();
   assert((SYSCFG->EXTICR[0] & 0xFu) == 0u); // make sure EXTI0 is connected to PA0
 
+  NVIC_SetPriority(EXTI0_1_IRQn, 1);
+  NVIC_EnableIRQ(EXTI0_1_IRQn);
+
   while (1)
   {
     // toggle red led
