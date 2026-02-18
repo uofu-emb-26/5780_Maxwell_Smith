@@ -19,12 +19,18 @@ int main(void)
   SystemClock_Config();
 
   Green_Orange_LED_GPIO_Init();
-  TIM2_UEV_Init_4Hz();
-  TIM3_PWM_800Hz_Init();
+  Red_Blue_LED_Init();
 
+  TIM3_PWM_800Hz_Init();
+  TIM3_PWM_Start();
+
+  TIM2_UEV_Init_4Hz();
   while (1)
   {
- 
+    TIM3_PWM_SetDutyPercent(0);
+    HAL_Delay(1000);
+    TIM3_PWM_SetDutyPercent(100);
+    HAL_Delay(1000);
   }
   return -1;
 }
@@ -33,8 +39,8 @@ static void Green_Orange_LED_GPIO_Init(void)
 {
   RCC->AHBENR |= RCC_AHBENR_GPIOCEN; // Enable GPIOC clock
 
-  GPIOC->MODER &= ~(3u << (2 * 8)) | ((3u << (2 * 9)));  // Clear mode bits for PC8 and PC9
-  GPIOC->MODER |= (1u << (2 * 8)) | (1u << (2 * 9));  // Set mode bits for PC8 and PC9
+  GPIOC->MODER &= ~((3u << (2 * 8)) | ((3u << (2 * 9))));  // Clear mode bits for PC8 and PC9
+  GPIOC->MODER |= ((1u << (2 * 8)) | (1u << (2 * 9)));  // Set mode bits for PC8 and PC9
 
   GPIOC->BSRR = (1u << 8) | (1u << (9 + 16)); // Set PC8 high and PC9 low
 }

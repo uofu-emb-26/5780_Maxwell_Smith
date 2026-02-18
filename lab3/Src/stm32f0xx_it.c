@@ -1,6 +1,7 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
 #include "stm32f0xx_it.h"
+#include "tim3_pwm.h"
 
 /******************************************************************************/
 /*           Cortex-M0 Processor Interruption and Exception Handlers          */
@@ -72,5 +73,13 @@ void TIM2_IRQHandler(void)
       GPIOC->BSRR = (1u << 9) | (1u << (8 + 16)); // Set PC9 high and PC8 low
       led_state = 0;
     }
+
+    static int8_t step = 5;
+    static uint8_t duty = 0;
+
+    if ((step > 0) && (duty >= 100)) step = -step; // Reverse direction at 100%
+    if ((step < 0) && (duty == 0)) step = -step; // Reverse direction at 0%
+    duty = (uint8_t)(duty + step);
+    TIM3_PWM_SetDutyPercent(duty);
   }
 }
