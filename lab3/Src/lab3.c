@@ -1,7 +1,10 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
+#include "tim2_uev.h"
+#include "stm32f0xx_it.h"
 
 void SystemClock_Config(void);
+static void Green_Orange_LED_GPIO_Init(void);
 
 /**
   * @brief  The application entry point.
@@ -14,11 +17,24 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
+  Green_Orange_LED_GPIO_Init();
+  TIM2_UEV_Init_4Hz();
+
   while (1)
   {
  
   }
   return -1;
+}
+
+static void Green_Orange_LED_GPIO_Init(void)
+{
+  RCC->AHBENR |= RCC_AHBENR_GPIOCEN; // Enable GPIOC clock
+
+  GPIOC->MODER &= ~(3u << (2 * 8)) | ((3u << (2 * 9)));  // Clear mode bits for PC8 and PC9
+  GPIOC->MODER |= (1u << (2 * 8)) | (1u << (2 * 9));  // Set mode bits for PC8 and PC9
+
+  GPIOC->BSRR = (1u << 8) | (1u << (9 + 16)); // Set PC8 high and PC9 low
 }
 
 /**

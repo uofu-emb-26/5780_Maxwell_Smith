@@ -54,3 +54,23 @@ void SysTick_Handler(void)
 /* please refer to the startup file (startup_stm32f0xx.s).                    */
 /******************************************************************************/
 
+void TIM2_IRQHandler(void)
+{
+  if (TIM2->SR & TIM_SR_UIF) // Check if update interrupt flag is set
+  {
+    TIM2->SR &= ~TIM_SR_UIF; // Clear update interrupt flag
+
+    static uint8_t led_state = 0; // 0 for green on, 1 for orange on
+
+    if (led_state == 0)
+    {
+      GPIOC->BSRR = (1u << 8) | (1u << (9 + 16)); // Set PC8 high and PC9 low
+      led_state = 1;
+    }
+    else
+    {
+      GPIOC->BSRR = (1u << 9) | (1u << (8 + 16)); // Set PC9 high and PC8 low
+      led_state = 0;
+    }
+  }
+}

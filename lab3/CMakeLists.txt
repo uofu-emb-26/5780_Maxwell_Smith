@@ -3,6 +3,7 @@ add_executable(lab3
     Src/lab3.c
     Src/stm32f0xx_hal_msp.c
     Src/stm32f0xx_it.c
+    Src/tim2_uev.c
 )
 
 # Add the map file to the list of files to be removed with 'clean' target
