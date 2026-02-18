@@ -2,6 +2,7 @@
 #include "stm32f0xx_hal.h"
 #include "tim2_uev.h"
 #include "stm32f0xx_it.h"
+#include "tim3_pwm.h"
 
 void SystemClock_Config(void);
 static void Green_Orange_LED_GPIO_Init(void);
@@ -19,6 +20,7 @@ int main(void)
 
   Green_Orange_LED_GPIO_Init();
   TIM2_UEV_Init_4Hz();
+  TIM3_PWM_800Hz_Init();
 
   while (1)
   {
