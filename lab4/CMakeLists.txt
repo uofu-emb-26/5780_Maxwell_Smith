@@ -17,6 +17,14 @@ target_include_directories(lab4 PRIVATE
 target_compile_definitions(lab4 PRIVATE
 )
 
+target_include_directories(STM32_Drivers BEFORE PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/Inc
+)
+
+target_compile_definitions(STM32_Drivers PRIVATE
+    HAL_USART_MODULE_ENABLED
+)
+
 # Add linked libraries
 target_link_libraries(lab4
     STM32_Drivers

@@ -1,5 +1,12 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
+#include <string.h>
+#include <stdio.h>
+
+USART_HandleTypeDef husart3;
+
+static void MX_USART3_Init(void);
+int __io_putchar(int ch);
 
 void SystemClock_Config(void);
 
@@ -14,9 +21,14 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
+  MX_USART3_Init();
+
+  const char msg[] = "USART3 connected and communicating\r\n";
+
   while (1)
   {
- 
+    HAL_USART_Transmit(&husart3, (uint8_t*)msg, strlen(msg), 100);
+    HAL_Delay(1000);
   }
   return -1;
 }
@@ -67,6 +79,34 @@ void Error_Handler(void)
   while (1)
   {
   }
+}
+
+static void MX_USART3_Init(void)
+{
+  husart3.Instance = USART3;
+  husart3.Init.BaudRate = 115200;
+  husart3.Init.WordLength = USART_WORDLENGTH_8B;
+  husart3.Init.StopBits = USART_STOPBITS_1;
+  husart3.Init.Parity = USART_PARITY_NONE;
+  husart3.Init.Mode = USART_MODE_TX_RX;
+
+  husart3.Init.CLKPolarity = USART_POLARITY_LOW;
+  husart3.Init.CLKPhase = USART_PHASE_1EDGE;
+  husart3.Init.CLKLastBit = USART_LASTBIT_DISABLE;
+ 
+  
+  
+  if (HAL_USART_Init(&husart3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+int __io_putchar(int ch)
+{
+  uint8_t c = (uint8_t)ch;
+  HAL_USART_Transmit(&husart3, &c, 1, HAL_MAX_DELAY);
+  return ch;
 }
 
 #ifdef USE_FULL_ASSERT
