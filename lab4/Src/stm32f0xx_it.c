@@ -80,6 +80,7 @@ void USART3_4_IRQHandler(void)
       usart3_rx_overflow = 1u;
     }
   }
+  //
 
   uint32_t icr = 0u;
   if (isr & USART_ISR_ORE )
