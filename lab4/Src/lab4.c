@@ -1,14 +1,32 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
-#include <string.h>
-#include <stdio.h>
-
-USART_HandleTypeDef husart3;
 
 static void MX_USART3_Init(void);
 int __io_putchar(int ch);
 
 void SystemClock_Config(void);
+
+static void MX_GPIO_Init(void);
+
+static void usart3_write_char(char c);
+static void usart3_write_string(const char* str);
+
+
+static void MX_GPIO_Init(void)
+{
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  
+
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9, GPIO_PIN_RESET);
+}
 
 /**
   * @brief  The application entry point.
@@ -21,16 +39,70 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
+  MX_GPIO_Init();
   MX_USART3_Init();
 
-  const char msg[] = "USART3 connected and communicating\r\n";
+ //HAL_USART_Transmit(&USART3, "USART3 ready. Type r/o/g/b to toggle LEDs.\r\n", strlen("USART3 ready. Type r/o/g/b to toggle LEDs.\r\n"), 100);
+ usart3_write_string("USART3 ready. Type r/o/g/b to toggle LEDs.\r\n");
 
-  while (1)
+while (1)
+{
+  while ((USART3->ISR & (1u << 5u)) == 0)
   {
-    HAL_USART_Transmit(&husart3, (uint8_t*)msg, strlen(msg), 100);
-    HAL_Delay(1000);
+    // empty loop (blocking wait)
   }
+
+  char c = (char)(USART3->RDR & 0xFF);
+
+  if (c == '\r' || c == '\n')
+    continue;
+
+  switch (c)
+  {
+    case 'r':
+    case 'R':
+      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6); // red
+      break;
+
+    case 'b':
+    case 'B':
+      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7); // blue
+      break;
+
+    case 'o':
+    case 'O':
+      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8); // orange
+      break;
+
+    case 'g':
+    case 'G':
+      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_9); // green
+      break;
+
+    default:
+      usart3_write_char("Error: invalid key (use r/o/g/b)\r\n");
+      break;
+  }
+}
+    
   return -1;
+}
+
+static void usart3_write_char(char c)
+{
+  while ((USART3->ISR & USART_ISR_TXE) == 0)
+  {
+    // empty loop (blocking wait)
+  }
+  USART3->TDR = (uint8_t)c;
+}
+
+static void usart3_write_string(const char* str)
+{
+  while (*str)
+  {
+    usart3_write_char(*str++);
+  }
 }
 
 /**
@@ -83,31 +155,53 @@ void Error_Handler(void)
 
 static void MX_USART3_Init(void)
 {
-  husart3.Instance = USART3;
-  husart3.Init.BaudRate = 115200;
-  husart3.Init.WordLength = USART_WORDLENGTH_8B;
-  husart3.Init.StopBits = USART_STOPBITS_1;
-  husart3.Init.Parity = USART_PARITY_NONE;
-  husart3.Init.Mode = USART_MODE_TX_RX;
+  __HAL_RCC_USART3_CLK_ENABLE();
+  //__HAL_RCC_GPIOC_CLK_ENABLE();
 
-  husart3.Init.CLKPolarity = USART_POLARITY_LOW;
-  husart3.Init.CLKPhase = USART_PHASE_1EDGE;
-  husart3.Init.CLKLastBit = USART_LASTBIT_DISABLE;
- 
-  
-  
-  if (HAL_USART_Init(&husart3) != HAL_OK)
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF1_USART3;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  // GPIOC->MODER |= (2 < 2*4);
+  // GPIOC->AFR[0] |= (1 << 4*4);
+
+  // GPIOC->MODER |= (2 < 2*5);
+  // GPIOC->AFR[0] |= (1 << 4*5);
+
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF1_USART3;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  // USART3->CR3 = 0; // no flow control
+
+  //USART3->CR1 &= ~USART_CR1_UE;
+  USART3->CR1 &= ~(USART_CR1_M | USART_CR1_PCE | USART_CR1_OVER8);
+  USART3->CR2 &= ~(USART_CR2_STOP | USART_CR2_CLKEN);
+
+  USART3->BRR = HAL_RCC_GetHCLKFreq() / 115200;
+  USART3->CR1 |= (USART_CR1_TE | USART_CR1_RE);
+  USART3->CR1 |= USART_CR1_UE;
+
+  while ((USART3->ISR & (USART_ISR_TEACK | USART_ISR_REACK)) != (USART_ISR_TEACK | USART_ISR_REACK))
   {
-    Error_Handler();
+    // empty loop (waiting for TE and RE to be acknowledged by hardware)
   }
 }
 
-int __io_putchar(int ch)
-{
-  uint8_t c = (uint8_t)ch;
-  HAL_USART_Transmit(&husart3, &c, 1, HAL_MAX_DELAY);
-  return ch;
-}
+//int __io_putchar(int ch)
+//{
+  //uint8_t c = (uint8_t)ch;
+  //HAL_USART_Transmit(&USART3, &c, 1, HAL_MAX_DELAY);
+  //return ch;
+//}
 
 #ifdef USE_FULL_ASSERT
 /**
