@@ -1,8 +1,14 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
 
+typedef enum{
+  PARSE_WAIT_LED = 0,
+  PARSE_WAIT_OP = 1,
+} parse_state_t;
+
+
 static void MX_USART3_Init(void);
-int __io_putchar(int ch);
+//int __io_putchar(int ch);
 
 void SystemClock_Config(void);
 
@@ -11,6 +17,149 @@ static void MX_GPIO_Init(void);
 static void usart3_write_char(char c);
 static void usart3_write_string(const char* str);
 
+static int usart3_read_char_nonblocking(char* c);
+static const char* led_name_from_letter(char led);
+static uint16_t led_pin_from_letter(char led);
+static char to_lower_ascii(char c);
+static void print_prompt_if_needed(uint8_t* prompt_shown);
+static void print_error_and_reset(parse_state_t* state, uint8_t* prompt_shown, const char* msg);
+static void execute_and_report_command(char led, char op);
+
+
+#define RX_BUFFER_SIZE 64u
+volatile uint8_t usart3_rx_buffer[RX_BUFFER_SIZE];
+volatile uint8_t usart3_rx_head = 0u;
+volatile uint8_t usart3_rx_tail = 0u;
+volatile uint8_t usart3_rx_overflow = 0u;
+
+static int usart3_read_char_nonblocking(char* c)
+{
+  if (usart3_rx_head == usart3_rx_tail)
+  {
+    return 0;
+  }
+  else
+  {
+    *c = (char)usart3_rx_buffer[usart3_rx_tail];
+    uint8_t next = (uint8_t)(usart3_rx_tail + 1u);
+    if (next >= RX_BUFFER_SIZE)
+      next = 0u;
+    usart3_rx_tail = next;
+    return 1;
+  }
+}
+
+static uint16_t led_pin_from_letter(char led)
+{
+  switch (led)
+  {
+    case 'r':
+    case 'R':
+      return GPIO_PIN_6; // red
+
+    case 'b':
+    case 'B':
+      return GPIO_PIN_7; // blue
+
+    case 'o':
+    case 'O':
+      return GPIO_PIN_8; // orange
+
+    case 'g':
+    case 'G':
+      return GPIO_PIN_9; // green
+
+    default:
+      return 0;
+  }
+}
+
+static const char* led_name_from_letter(char led)
+{
+  switch (led)
+  {
+    case 'r':
+    case 'R':
+      return "red";
+
+    case 'b':
+    case 'B':
+      return "blue";
+
+    case 'o':
+    case 'O':
+      return "orange";
+
+    case 'g':
+    case 'G':
+      return "green";
+
+    default:
+      return "?";
+  }
+}
+
+static char to_lower_ascii(char c)
+{
+  if (c >= 'A' && c <= 'Z')
+    return (char)(c - 'A' + 'a');
+  else
+    return c;
+}
+
+static void print_prompt_if_needed(uint8_t* prompt_shown)
+{
+  if (*prompt_shown)
+    return;
+  
+  usart3_write_string("CMD? ");
+  *prompt_shown = 1u;
+}
+
+static void print_error_and_reset(parse_state_t* state, uint8_t* prompt_shown, const char* msg)
+{
+  usart3_write_string("\r\n");
+  usart3_write_string(msg);
+  usart3_write_string("\r\n");
+  *state = PARSE_WAIT_LED;
+  *prompt_shown = 0u;
+}
+
+static void execute_and_report_command(char led, char op)
+{
+  const uint16_t pin = led_pin_from_letter(led);
+  const char* led_name = led_name_from_letter(led);
+  if (pin == 0u)
+  {
+    return;
+  }
+
+  const char* action = "";
+  switch(op){
+    case '0':
+      HAL_GPIO_WritePin(GPIOC, pin, GPIO_PIN_RESET);
+      action = "OFF";
+      break;
+    case '1':
+      HAL_GPIO_WritePin(GPIOC, pin, GPIO_PIN_SET);
+      action = "ON";
+      break;
+    case '2':
+      HAL_GPIO_TogglePin(GPIOC, pin);
+      action = "TOGGLED";
+      break;
+    default:
+      return;
+  }
+  usart3_write_string("\r\nCommand Recognized: ");
+  usart3_write_char((char)(led - 'a' + 'A')); // uppercase letter
+  usart3_write_char(op);
+  usart3_write_string(" -> ");
+  usart3_write_string(led_name);
+  usart3_write_string(" is now ");
+  usart3_write_string(action);
+  usart3_write_string("\r\n");
+}
 
 static void MX_GPIO_Init(void)
 {
@@ -43,49 +192,98 @@ int main(void)
   MX_USART3_Init();
 
  //HAL_USART_Transmit(&USART3, "USART3 ready. Type r/o/g/b to toggle LEDs.\r\n", strlen("USART3 ready. Type r/o/g/b to toggle LEDs.\r\n"), 100);
- usart3_write_string("USART3 ready. Type r/o/g/b to toggle LEDs.\r\n");
+ //usart3_write_string("USART3 ready. Type r/o/g/b to toggle LEDs.\r\n");
+ usart3_write_string("USART3 ready. Commands: LED 0/1/2 (0 = off, 1 = on, 2 = toggle).\r\n");
+ parse_state_t state = PARSE_WAIT_LED;
+ char led = 0;
+ uint8_t prompt_shown = 0u;
 
 while (1)
 {
-  while ((USART3->ISR & (1u << 5u)) == 0)
-  {
-    // empty loop (blocking wait)
+  if (usart3_rx_overflow){
+    usart3_rx_overflow = 0u;
+    usart3_write_string("\r\nError: input buffer overflow. Some characters may have been lost.\r\n");
+    state = PARSE_WAIT_LED;
+    prompt_shown = 0u;
   }
 
-  char c = (char)(USART3->RDR & 0xFF);
+  if (state == PARSE_WAIT_LED)
+    print_prompt_if_needed(&prompt_shown);
 
-  if (c == '\r' || c == '\n')
+  char c;
+  if (!usart3_read_char_nonblocking(&c))
     continue;
-
-  switch (c)
+  
+  if (c == '\r' || c == '\n')
   {
-    case 'r':
-    case 'R':
-      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6); // red
-      break;
+    continue;
+  }
 
-    case 'b':
-    case 'B':
-      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7); // blue
-      break;
+  c = to_lower_ascii(c);
 
-    case 'o':
-    case 'O':
-      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8); // orange
-      break;
-
-    case 'g':
-    case 'G':
-      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_9); // green
-      break;
-
-    default:
-      usart3_write_char("Error: invalid key (use r/o/g/b)\r\n");
-      break;
+  if (state == PARSE_WAIT_LED)
+  {
+    if (led_pin_from_letter(c) == 0u)
+    {
+      print_error_and_reset(&state, &prompt_shown, "Error: expected LED letter (r/o/g/b)");
+      continue;
+    }
+    else
+    {
+      led = c;
+      state = PARSE_WAIT_OP;
+    }
+  }
+  else {
+    if (!(c == '0' || c == '1' || c == '2'))
+    {
+      print_error_and_reset(&state, &prompt_shown, "Error: expected operation (0 = off, 1 = on, 2 = toggle)");
+      continue;
+    }
+    execute_and_report_command(led, c);
+    state = PARSE_WAIT_LED;
+    prompt_shown = 0u;
   }
 }
+//   while ((USART3->ISR & (1u << 5u)) == 0)
+//   {
+//     // empty loop (blocking wait)
+//   }
+
+//   char c = (char)(USART3->RDR & 0xFF);
+
+//   if (c == '\r' || c == '\n')
+//     continue;
+
+//   switch (c)
+//   {
+//     case 'r':
+//     case 'R':
+//       HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_6); // red
+//       break;
+
+//     case 'b':
+//     case 'B':
+//       HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7); // blue
+//       break;
+
+//     case 'o':
+//     case 'O':
+//       HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_8); // orange
+//       break;
+
+//     case 'g':
+//     case 'G':
+//       HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_9); // green
+//       break;
+
+//     default:
+//       usart3_write_char("Error: invalid key (use r/o/g/b)\r\n");
+//       break;
+//   }
+// }
     
-  return -1;
+  return 0;
 }
 
 static void usart3_write_char(char c)
@@ -94,15 +292,14 @@ static void usart3_write_char(char c)
   {
     // empty loop (blocking wait)
   }
+
   USART3->TDR = (uint8_t)c;
 }
 
 static void usart3_write_string(const char* str)
 {
-  while (*str)
-  {
-    usart3_write_char(*str++);
-  }
+  for(int i = 0; str[i] != '\0'; i++)
+    usart3_write_char(str[i]);
 }
 
 /**
@@ -156,7 +353,7 @@ void Error_Handler(void)
 static void MX_USART3_Init(void)
 {
   __HAL_RCC_USART3_CLK_ENABLE();
-  //__HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
 
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
@@ -194,6 +391,10 @@ static void MX_USART3_Init(void)
   {
     // empty loop (waiting for TE and RE to be acknowledged by hardware)
   }
+
+  USART3->CR1 |= USART_CR1_RXNEIE; // enable RX interrupt
+  HAL_NVIC_SetPriority(USART3_4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(USART3_4_IRQn);
 }
 
 //int __io_putchar(int ch)
