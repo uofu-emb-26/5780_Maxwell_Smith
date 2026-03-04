@@ -1,15 +1,28 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
 
-#define L3GD20_ADDR_7BIT 0x69
-#define L3GD20_WHOAMI_REG 0x0F
-#define L3GD20_WHOAMI_EXPECTED 0xD3
+#define I3G4250D_ADDR_7BIT 0x69
+#define I3G4250D_WHOAMI_REG 0x0F
+#define I3G4250D_WHOAMI_EXPECTED 0xD3
+#define I3G4250D_CTRL_REG1 0x20
+#define I3G4250D_OUT_X_L 0x28
+#define I3G4250D_OUT_Y_L 0x2A
+#define LED_RED_PIN 6
+#define LED_BLUE_PIN 7
+#define LED_ORANGE_PIN 8
+#define LED_GREEN_PIN 9
+#define GYRO_THRESH_RAW 200
 
 static void gpio_for_i2c2_and_gyro_init(void);
 static void i2c2_init_100kHz(void);
 static uint8_t i3g4250d_read_reg(uint8_t reg);
 static int i2c2_wait_txis_or_nack(void);
 static int i2c2_wait_rxne_or_nack(void);
+
+static void gpio_for_leds_init(void);
+static int i3g4250d_write_reg(uint8_t reg, uint8_t val);
+static int i3g4250d_read_regs(uint8_t start_reg, uint8_t *buffer, uint8_t len);
+static void leds_update_from_xy(int16_t x, int16_t y);
 
 void SystemClock_Config(void);
 
@@ -25,18 +38,36 @@ int main(void)
   SystemClock_Config();
 
   gpio_for_i2c2_and_gyro_init();
+  gpio_for_leds_init();
   i2c2_init_100kHz();
 
-  volatile uint8_t whoami = i3g4250d_read_reg(L3GD20_WHOAMI_REG);
+  uint8_t whoami = i3g4250d_read_reg(I3G4250D_WHOAMI_REG);
 
-  if (whoami == L3GD20_WHOAMI_EXPECTED)
+  if (whoami != I3G4250D_WHOAMI_EXPECTED)
   {
-    
+    while (1)
+    {
+      GPIOC->ODR ^= (1u << LED_RED_PIN);
+      HAL_Delay(200);
+    }
   }
+
+  // initialize gyro (B = 1011) PD = 1, Zen = 0, Xen = 1, Yen = 1
+  (void)i3g4250d_write_reg(I3G4250D_CTRL_REG1, 0x0Bu);
+
+  volatile int16_t x_raw = 0;
+  volatile int16_t y_raw = 0;
 
   while (1)
   {
- 
+    uint8_t b[4] = {0};
+    if (i3g4250d_read_regs(I3G4250D_OUT_X_L, b, 4) == 0)
+    {
+      x_raw = (int16_t)((uint16_t)b[1] << 8 | b[0]);
+      y_raw = (int16_t)((uint16_t)b[3] << 8 | b[2]);
+      leds_update_from_xy(x_raw, y_raw);
+    }
+    HAL_Delay(100);
   }
   return -1;
 }
@@ -98,40 +129,8 @@ static void i2c2_init_100kHz(void)
 
 static uint8_t i3g4250d_read_reg(uint8_t reg)
 {
-  while (I2C2->ISR & I2C_ISR_BUSY) {} // wait until I2C2 is not busy
-
-  I2C2->CR2 &= ~((0x3FFu << 0) | (0xFFu << 16) | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP);
-  I2C2->CR2 |= ((uint32_t)L3GD20_ADDR_7BIT << 1) | (1u << 16) | I2C_CR2_START;
-
-  if (i2c2_wait_txis_or_nack() != 0)
-  {
-    I2C2->ICR = I2C_ICR_NACKCF;
-    I2C2->CR2 |= I2C_CR2_STOP;
-    return 0xFF;
-  }
-
-  I2C2->TXDR = reg;
-
-  while ((I2C2->ISR & I2C_ISR_TC) == 0) {} // wait until transfer complete
-
-  I2C2->CR2 &= ~((0x3FFu << 0) | (0xFFu << 16) | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP);
-  I2C2->CR2 |= ((uint32_t)L3GD20_ADDR_7BIT << 1) | (1u << 16) | I2C_CR2_RD_WRN | I2C_CR2_START;
-
-  if (i2c2_wait_rxne_or_nack() != 0)
-  {
-    I2C2->ICR = I2C_ICR_NACKCF;
-    I2C2->CR2 |= I2C_CR2_STOP;
-    return 0xFF;
-  }
-
-  uint8_t val = (uint8_t)I2C2->RXDR;
-
-  while ((I2C2->ISR & I2C_ISR_TC) == 0) {} // wait until transfer complete
-  I2C2->CR2 |= I2C_CR2_STOP;
-
-  while ((I2C2->ISR & I2C_ISR_STOPF) == 0) {} // wait until stop flag is set
-  I2C2->ICR = I2C_ICR_STOPCF; // clear
-
+  uint8_t val = 0xFF;
+  (void)i3g4250d_read_regs(reg, &val, 1);
   return val;
 }
 
@@ -153,6 +152,136 @@ static int i2c2_wait_rxne_or_nack(void)
     if (isr & I2C_ISR_NACKF) return -1;
     if (isr & I2C_ISR_RXNE) return 0;
   }
+}
+
+static void gpio_for_leds_init(void)
+{
+  RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
+
+  for(uint32_t pin = 6; pin <= 9; pin++)
+  {
+    GPIOC->MODER &= ~(3u << (pin * 2));
+    GPIOC->MODER |= (1u << (pin * 2));
+    GPIOC->OTYPER &= ~(1u << pin);
+  }
+
+  GPIOC->BSRR = ((1u << LED_RED_PIN) | (1u << LED_BLUE_PIN) | (1u << LED_ORANGE_PIN) | (1u << LED_GREEN_PIN)) << 16;
+}
+
+static int i3g4250d_write_reg(uint8_t reg, uint8_t val)
+{
+  while (I2C2->ISR & I2C_ISR_BUSY) {} // wait until I2C2 is not busy
+
+  I2C2->CR2 &= ~((0x3FFu << 0) | (0xFFu << 16) | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP | I2C_CR2_AUTOEND | I2C_CR2_RELOAD);
+  I2C2->CR2 |= ((uint8_t)I3G4250D_ADDR_7BIT << 1) | (2u << 16) | I2C_CR2_START;
+
+  if (i2c2_wait_txis_or_nack() != 0)
+  {
+    I2C2->ICR = I2C_ICR_NACKCF;
+    I2C2->CR2 |= I2C_CR2_STOP;
+    return -1;
+  }
+
+  I2C2->TXDR = reg;
+
+  if (i2c2_wait_txis_or_nack() != 0)
+  {
+    I2C2->ICR = I2C_ICR_NACKCF;
+    I2C2->CR2 |= I2C_CR2_STOP;
+    return -1;
+  }
+
+  I2C2->TXDR = val;
+
+  while ((I2C2->ISR & I2C_ISR_TC) == 0) {} // wait until transfer complete
+
+  I2C2->CR2 |= I2C_CR2_STOP;
+  while ((I2C2->ISR & I2C_ISR_STOPF) == 0) {} // wait until stop flag is set
+  I2C2->ICR = I2C_ICR_STOPCF; // clear stop flag
+  return 0;
+}
+
+static int i3g4250d_read_regs(uint8_t start_reg, uint8_t *buffer, uint8_t len)
+{
+  if (len == 0) return 0;
+
+  while (I2C2->ISR & I2C_ISR_BUSY) {} // wait until I2C2 is not busy
+
+  uint8_t sub = start_reg;
+  if (len > 1) sub |= 0x80; // set auto-increment bit if reading multiple registers
+
+  I2C2->CR2 &= ~((0x3FFu << 0) | (0xFFu << 16) | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP | I2C_CR2_AUTOEND | I2C_CR2_RELOAD);
+  I2C2->CR2 |= ((uint8_t)I3G4250D_ADDR_7BIT << 1) | (1u << 16) | I2C_CR2_START;
+
+  if (i2c2_wait_txis_or_nack() != 0)
+  {
+    I2C2->ICR = I2C_ICR_NACKCF;
+    I2C2->CR2 |= I2C_CR2_STOP;
+    return -1;
+  }
+
+  I2C2->TXDR = sub;
+
+  while ((I2C2->ISR & I2C_ISR_TC) == 0) {} // wait until transfer complete
+
+  I2C2->CR2 &= ~((0x3FFu << 0) | (0xFFu << 16) | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP | I2C_CR2_AUTOEND | I2C_CR2_RELOAD);
+  I2C2->CR2 |= ((uint8_t)I3G4250D_ADDR_7BIT << 1) | ((uint32_t)len << 16) | I2C_CR2_RD_WRN | I2C_CR2_START;
+
+  for (uint8_t i = 0; i < len; i++)
+  {
+    if (i2c2_wait_rxne_or_nack() != 0)
+    {
+      I2C2->ICR = I2C_ICR_NACKCF;
+      I2C2->CR2 |= I2C_CR2_STOP;
+      return -1;
+    }
+    buffer[i] = (uint8_t)I2C2->RXDR;
+  }
+
+  while ((I2C2->ISR & I2C_ISR_TC) == 0) {} // wait until transfer complete
+
+  I2C2->CR2 |= I2C_CR2_STOP;
+  while ((I2C2->ISR & I2C_ISR_STOPF) == 0) {} // wait until stop flag is set
+  I2C2->ICR = I2C_ICR_STOPCF; // clear stop flag
+  return 0;
+}
+
+static void leds_update_from_xy(int16_t x, int16_t y)
+{
+  uint32_t set_mask = 0;
+  uint32_t reset_mask = 0;
+
+  if (x > GYRO_THRESH_RAW)
+  {
+    set_mask |= (1u << LED_ORANGE_PIN);
+    reset_mask |= (1u << LED_RED_PIN);
+  }
+  else if (x < -GYRO_THRESH_RAW)
+  {
+    set_mask |= (1u << LED_RED_PIN);
+    reset_mask |= (1u << LED_ORANGE_PIN);
+  }
+  else
+  {
+    reset_mask |= (1u << LED_RED_PIN) | (1u << LED_ORANGE_PIN);
+  }
+
+  if (y > GYRO_THRESH_RAW)
+  {
+    set_mask |= (1u << LED_GREEN_PIN);
+    reset_mask |= (1u << LED_BLUE_PIN);
+  }
+  else if (y < -GYRO_THRESH_RAW)
+  {
+    set_mask |= (1u << LED_BLUE_PIN);
+    reset_mask |= (1u << LED_GREEN_PIN);
+  }
+  else
+  {
+    reset_mask |= (1u << LED_BLUE_PIN) | (1u << LED_GREEN_PIN);
+  }
+
+  GPIOC->BSRR = (reset_mask << 16) | set_mask;
 }
 
 /**
