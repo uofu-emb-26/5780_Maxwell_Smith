@@ -7,11 +7,13 @@
 #define I3G4250D_CTRL_REG1 0x20
 #define I3G4250D_OUT_X_L 0x28
 #define I3G4250D_OUT_Y_L 0x2A
-#define LED_RED_PIN 6
-#define LED_BLUE_PIN 7
-#define LED_ORANGE_PIN 8
-#define LED_GREEN_PIN 9
-#define GYRO_THRESH_RAW 200
+#define I3G4250D_STATUS_REG 0x27
+#define LED_RED_PIN 6u
+#define LED_BLUE_PIN 7u
+#define LED_ORANGE_PIN 8u
+#define LED_GREEN_PIN 9u
+#define GYRO_ON_THRESH_RAW 800
+#define GYRO_OFF_THRESH_RAW 500
 
 static void gpio_for_i2c2_and_gyro_init(void);
 static void i2c2_init_100kHz(void);
@@ -23,6 +25,8 @@ static void gpio_for_leds_init(void);
 static int i3g4250d_write_reg(uint8_t reg, uint8_t val);
 static int i3g4250d_read_regs(uint8_t start_reg, uint8_t *buffer, uint8_t len);
 static void leds_update_from_xy(int16_t x, int16_t y);
+static void i3g4250d_calibrate_bias(int16_t *x, int16_t *y);
+static int i3g4250d_read_xy(int16_t *x, int16_t *y);
 
 void SystemClock_Config(void);
 
@@ -55,16 +59,22 @@ int main(void)
   // initialize gyro (B = 1011) PD = 1, Zen = 0, Xen = 1, Yen = 1
   (void)i3g4250d_write_reg(I3G4250D_CTRL_REG1, 0x0Bu);
 
+  int16_t x_bias = 0;
+  int16_t y_bias = 0;
+
+  i3g4250d_calibrate_bias(&x_bias, &y_bias);
+
   volatile int16_t x_raw = 0;
   volatile int16_t y_raw = 0;
 
   while (1)
   {
-    uint8_t b[4] = {0};
-    if (i3g4250d_read_regs(I3G4250D_OUT_X_L, b, 4) == 0)
+    int16_t x = 0, y = 0;
+    int rc = i3g4250d_read_xy(&x, &y);
+    if (rc == 0)
     {
-      x_raw = (int16_t)((uint16_t)b[1] << 8 | b[0]);
-      y_raw = (int16_t)((uint16_t)b[3] << 8 | b[2]);
+      x_raw = (int16_t)(x - x_bias);
+      y_raw = (int16_t)(y - y_bias);
       leds_update_from_xy(x_raw, y_raw);
     }
     HAL_Delay(100);
@@ -248,40 +258,113 @@ static int i3g4250d_read_regs(uint8_t start_reg, uint8_t *buffer, uint8_t len)
 
 static void leds_update_from_xy(int16_t x, int16_t y)
 {
+  static int8_t x_state = 0;
+  static int8_t y_state = 0;
+
+  if (x_state == 0)
+  {
+    if (x > GYRO_ON_THRESH_RAW) x_state = +1;
+    else if (x < -GYRO_ON_THRESH_RAW) x_state = -1;
+  }
+  else if (x_state == +1)
+  {
+    if (x < GYRO_OFF_THRESH_RAW) x_state = 0;
+  }
+  else 
+  {
+    if (x > -GYRO_OFF_THRESH_RAW) x_state = 0;
+  }
+
+  if (y_state == 0)
+  {
+    if (y > GYRO_ON_THRESH_RAW) y_state = +1;
+    else if (y < GYRO_ON_THRESH_RAW) y_state = -1;
+  }
+  else if (y_state == +1)
+  {
+    if (y < GYRO_OFF_THRESH_RAW) y_state = 0;
+  }
+  else 
+  {
+    if (y > -GYRO_OFF_THRESH_RAW) y_state = 0;
+  }
+
   uint32_t set_mask = 0;
   uint32_t reset_mask = 0;
 
-  if (x > GYRO_THRESH_RAW)
+  if (x_state == +1)
   {
     set_mask |= (1u << LED_ORANGE_PIN);
-    reset_mask |= (1u << LED_RED_PIN);
-  }
-  else if (x < -GYRO_THRESH_RAW)
-  {
-    set_mask |= (1u << LED_RED_PIN);
-    reset_mask |= (1u << LED_ORANGE_PIN);
-  }
-  else
-  {
-    reset_mask |= (1u << LED_RED_PIN) | (1u << LED_ORANGE_PIN);
-  }
-
-  if (y > GYRO_THRESH_RAW)
-  {
-    set_mask |= (1u << LED_GREEN_PIN);
-    reset_mask |= (1u << LED_BLUE_PIN);
-  }
-  else if (y < -GYRO_THRESH_RAW)
-  {
-    set_mask |= (1u << LED_BLUE_PIN);
     reset_mask |= (1u << LED_GREEN_PIN);
   }
-  else
+  else if (x_state == -1)
   {
-    reset_mask |= (1u << LED_BLUE_PIN) | (1u << LED_GREEN_PIN);
+    set_mask |= (1u << LED_GREEN_PIN);
+    reset_mask |= (1u << LED_ORANGE_PIN);
+  }
+  else 
+  {
+    reset_mask |= (1u << LED_GREEN_PIN) | (1u << LED_ORANGE_PIN);
+  }
+
+  if (y_state == +1)
+  {
+    set_mask |= (1u << LED_RED_PIN);
+    reset_mask |= (1u << LED_BLUE_PIN);
+  }
+  else if (y_state == -1)
+  {
+    set_mask |= (1u << LED_BLUE_PIN);
+    reset_mask |= (1u << LED_RED_PIN);
+  }
+  else 
+  {
+    reset_mask |= (1u << LED_BLUE_PIN) | (1u << LED_RED_PIN);
   }
 
   GPIOC->BSRR = (reset_mask << 16) | set_mask;
+}
+
+static int i3g4250d_read_xy(int16_t *x, int16_t *y)
+{
+  uint8_t st = i3g4250d_read_reg(I3G4250D_STATUS_REG);
+  if ((st & 0x03u) == 0u) return 1;
+
+  uint8_t b[4] = {0};
+  if (i3g4250d_read_regs(I3G4250D_OUT_X_L, b, 4) != 0) return -1;
+
+  *x = (int16_t)((uint16_t)b[1] << 8 | b[0]);
+  *y = (int16_t)((uint16_t)b[3] << 8 | b[2]);
+  return 0;
+}
+
+static void i3g4250d_calibrate_bias(int16_t *x_bias, int16_t *y_bias)
+{
+  enum {N = 128};
+  int32_t sx = 0, sy = 0;
+  int got = 0;
+
+  GPIOC->BSRR = (1u << LED_GREEN_PIN);
+
+  for (int i = 0; i < N; i++)
+  {
+    int16_t x = 0, y = 0;
+    if (i3g4250d_read_xy(&x, &y) == 0)
+    {
+      sx += x;
+      sy += y;
+      got++;
+    }
+    HAL_Delay(10);
+  }
+
+  GPIOC->BSRR = (1u << LED_GREEN_PIN) << 16;
+
+  if (got > 0)
+  {
+    *x_bias = (int16_t)(sx / got);
+    *y_bias = (int16_t)(sy / got);
+  }
 }
 
 /**
