@@ -1,6 +1,11 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
 
+
+static void gpio_for_i2c2_and_gyro_init(void);
+static void i2c2_init_100kHz(void);
+static uint8_t l3gd20_read_reg(uint8_t reg);
+
 void SystemClock_Config(void);
 
 /**
@@ -19,6 +24,68 @@ int main(void)
  
   }
   return -1;
+}
+
+static void gpio_for_i2c2_and_gyro_init(void)
+{
+  RCC->AHBENR |= RCC_AHBENR_GPIOBEN | RCC_AHBENR_GPIOCEN;
+
+  //PB11 SDA, alternate function, open drain, AF1
+  GPIOB->MODER &= ~(3u << (11 * 2));
+  GPIOB->MODER |= (2u << (11 * 2));
+  GPIOB->OTYPER |= (1u << 11);
+  GPIOB->PUPDR &= ~(3u << (11 * 2));
+  GPIOB->AFR[1] &= ~(0xFu << ((11 - 8) * 4));
+  GPIOB->AFR[1] |= (1u << ((11 - 8) * 4));
+
+  //PB13 SCL, alternate function, open drain, AF5
+  GPIOB->MODER &= ~(3u << (13 * 2));
+  GPIOB->MODER |= (2u << (13 * 2));
+  GPIOB->OTYPER |= (1u << 13);
+  GPIOB->PUPDR &= ~(3u << (13 * 2));
+  GPIOB->AFR[1] &= ~(0xFu << ((13 - 8) * 4));
+  GPIOB->AFR[1] |= (5u << ((13 - 8) * 4));
+
+  //PB14 output, push-pull, drive high
+  GPIOB->MODER &= ~(3u << (14 * 2));
+  GPIOB->MODER |= (1u << (14 * 2));
+  GPIOB->OTYPER &= ~(1u << 14);
+  GPIOB->ODR |= (1u << 14);
+
+  //PC0 output, push-pull, drive high
+  GPIOC->MODER &= ~(3u << (0 * 2));
+  GPIOC->MODER |= (1u << (0 * 2));
+  GPIOC->OTYPER &= ~(1u << 0);
+  GPIOC->ODR |= (1u << 0);
+
+  //PB15 input
+  GPIOB->MODER &= ~(3u << (15 * 2));
+}
+
+static void i2c2_init_100kHz(void)
+{
+  // enable clock to I2C2
+  RCC->APB1ENR |= RCC_APB1ENR_I2C2EN;
+
+  //reset I2C2
+  RCC->APB1RSTR |= RCC_APB1RSTR_I2CRST;
+  RCC->APB1RSTR &= ~RCC_APB1RSTR_ISC2RST;
+
+  // disable peripheral before configuring
+  I2C2->CR1 &= ~I2C_CR1_PE;
+
+  // (PRESC = 1, SCLDEL = 4, SDADEL = 2, SCLH = 0x0F or 13, SCLL = 0x13 or 19)
+  I2C2->TIMINGR = 0x10320F13; // 100 kHz I2C clock, 8 MHz peripheral clock
+
+  // enable peripheral after configuring
+  I2C2->CR1 |= I2C_CR1_PE;
+}
+
+static uint8_t l3gd20_read_reg(uint8_t reg)
+{
+  while (I2C2->ISR & I2C_ISR_BUSY) {} // wait until I2C2 is not busy
+
+
 }
 
 /**
