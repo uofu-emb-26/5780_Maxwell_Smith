@@ -1,10 +1,15 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
 
+#define L3GD20_ADDR_7BIT 0x69
+#define L3GD20_WHOAMI_REG 0x0F
+#define L3GD20_WHOAMI_EXPECTED 0xD3
 
 static void gpio_for_i2c2_and_gyro_init(void);
 static void i2c2_init_100kHz(void);
-static uint8_t l3gd20_read_reg(uint8_t reg);
+static uint8_t i3g4250d_read_reg(uint8_t reg);
+static int i2c2_wait_txis_or_nack(void);
+static int i2c2_wait_rxne_or_nack(void);
 
 void SystemClock_Config(void);
 
@@ -18,6 +23,16 @@ int main(void)
   HAL_Init();
   /* Configure the system clock */
   SystemClock_Config();
+
+  gpio_for_i2c2_and_gyro_init();
+  i2c2_init_100kHz();
+
+  volatile uint8_t whoami = i3g4250d_read_reg(L3GD20_WHOAMI_REG);
+
+  if (whoami == L3GD20_WHOAMI_EXPECTED)
+  {
+    
+  }
 
   while (1)
   {
@@ -68,8 +83,8 @@ static void i2c2_init_100kHz(void)
   RCC->APB1ENR |= RCC_APB1ENR_I2C2EN;
 
   //reset I2C2
-  RCC->APB1RSTR |= RCC_APB1RSTR_I2CRST;
-  RCC->APB1RSTR &= ~RCC_APB1RSTR_ISC2RST;
+  RCC->APB1RSTR |= RCC_APB1RSTR_I2C2RST;
+  RCC->APB1RSTR &= ~RCC_APB1RSTR_I2C2RST;
 
   // disable peripheral before configuring
   I2C2->CR1 &= ~I2C_CR1_PE;
@@ -81,11 +96,63 @@ static void i2c2_init_100kHz(void)
   I2C2->CR1 |= I2C_CR1_PE;
 }
 
-static uint8_t l3gd20_read_reg(uint8_t reg)
+static uint8_t i3g4250d_read_reg(uint8_t reg)
 {
   while (I2C2->ISR & I2C_ISR_BUSY) {} // wait until I2C2 is not busy
 
+  I2C2->CR2 &= ~((0x3FFu << 0) | (0xFFu << 16) | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP);
+  I2C2->CR2 |= ((uint32_t)L3GD20_ADDR_7BIT << 1) | (1u << 16) | I2C_CR2_START;
 
+  if (i2c2_wait_txis_or_nack() != 0)
+  {
+    I2C2->ICR = I2C_ICR_NACKCF;
+    I2C2->CR2 |= I2C_CR2_STOP;
+    return 0xFF;
+  }
+
+  I2C2->TXDR = reg;
+
+  while ((I2C2->ISR & I2C_ISR_TC) == 0) {} // wait until transfer complete
+
+  I2C2->CR2 &= ~((0x3FFu << 0) | (0xFFu << 16) | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP);
+  I2C2->CR2 |= ((uint32_t)L3GD20_ADDR_7BIT << 1) | (1u << 16) | I2C_CR2_RD_WRN | I2C_CR2_START;
+
+  if (i2c2_wait_rxne_or_nack() != 0)
+  {
+    I2C2->ICR = I2C_ICR_NACKCF;
+    I2C2->CR2 |= I2C_CR2_STOP;
+    return 0xFF;
+  }
+
+  uint8_t val = (uint8_t)I2C2->RXDR;
+
+  while ((I2C2->ISR & I2C_ISR_TC) == 0) {} // wait until transfer complete
+  I2C2->CR2 |= I2C_CR2_STOP;
+
+  while ((I2C2->ISR & I2C_ISR_STOPF) == 0) {} // wait until stop flag is set
+  I2C2->ICR = I2C_ICR_STOPCF; // clear
+
+  return val;
+}
+
+static int i2c2_wait_txis_or_nack(void)
+{
+  while(1)
+  {
+    uint32_t isr = I2C2->ISR;
+    if (isr & I2C_ISR_NACKF) return -1;
+    if (isr & I2C_ISR_TXIS) return 0;
+  }
+}
+
+static int i2c2_wait_rxne_or_nack(void)
+{
+  while(1)
+  {
+    uint32_t isr = I2C2->ISR;
+    if (isr & I2C_ISR_NACKF) return -1;
+    if (isr & I2C_ISR_RXNE) return 0;
+  }
 }
 
 /**
