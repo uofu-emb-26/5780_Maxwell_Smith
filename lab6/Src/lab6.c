@@ -10,9 +10,21 @@ void SystemClock_Config(void);
 #define LED_ALL_PINS (LED_RED_PIN | LED_BLUE_PIN | LED_ORANGE_PIN | LED_GREEN_PIN)
 #define ADC_INPUT_PIN GPIO_PIN_0 //PC0
 
+#define WAVE_TABLE_SIZE 32
+#define DAC_OUTPUT_PIN GPIO_PIN_4 //PA4
+
 static void GPIO_Init(void);
 static void ADC1_Init(void);
 static void Set_Led(uint8_t adc_value);
+
+static void DAC1_Init(void);
+static void DAC1_Write(uint8_t value);
+
+static const uint8_t sineLookupTable[WAVE_TABLE_SIZE] = {
+128, 152, 176, 198, 218, 234, 245, 253,
+255, 253, 245, 234, 218, 198, 176, 152,
+128, 103, 79, 57, 37, 21, 10, 2,
+0, 2, 10, 21, 37, 57, 79, 103};
 
 /**
   * @brief  The application entry point.
@@ -28,10 +40,24 @@ int main(void)
   GPIO_Init();
   ADC1_Init();
 
+  DAC1_Init();
+  uint8_t wave_index = 0;
+
+  uint32_t lastTick = HAL_GetTick();
+
   while (1)
   {
     uint8_t adc_value = (uint8_t)(ADC1->DR & 0xFF);
     Set_Led(adc_value);
+
+    if (HAL_GetTick() != lastTick)
+    {
+      lastTick = HAL_GetTick();
+
+      DAC1_Write(sineLookupTable[wave_index]);
+      wave_index = (uint8_t)((wave_index + 1) % WAVE_TABLE_SIZE);
+    }
+
   }
   return -1;
 }
@@ -40,6 +66,7 @@ static void GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_Init = {0};
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
 
   GPIO_Init.Pin = LED_ALL_PINS;
   GPIO_Init.Mode = GPIO_MODE_OUTPUT_PP;
@@ -53,6 +80,11 @@ static void GPIO_Init(void)
   GPIO_Init.Mode = GPIO_MODE_ANALOG;
   GPIO_Init.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_Init);
+
+  GPIO_Init.Pin = DAC_OUTPUT_PIN;
+  GPIO_Init.Mode = GPIO_MODE_ANALOG;
+  GPIO_Init.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_Init);
 }
 
 static void ADC1_Init(void)
@@ -107,6 +139,21 @@ static void Set_Led(uint8_t adc_value)
   HAL_GPIO_WritePin(GPIOC, LED_ORANGE_PIN, (adc_value >= thresh2) ? GPIO_PIN_SET : GPIO_PIN_RESET);
   HAL_GPIO_WritePin(GPIOC, LED_GREEN_PIN, (adc_value >= thresh3) ? GPIO_PIN_SET : GPIO_PIN_RESET);
   HAL_GPIO_WritePin(GPIOC, LED_BLUE_PIN, (adc_value >= thresh4) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+static void DAC1_Init(void)
+{
+  RCC->APB1ENR |= RCC_APB1ENR_DACEN;
+  DAC->CR &= ~(DAC_CR_EN1 | DAC_CR_BOFF1 | DAC_CR_TEN1 | DAC_CR_TSEL1 | DAC_CR_WAVE1 | DAC_CR_MAMP1 | DAC_CR_DMAEN1 | DAC_CR_DMAUDRIE1);
+  DAC->CR |= DAC_CR_TEN1 | DAC_CR_TSEL1_0 | DAC_CR_TSEL1_1 | DAC_CR_TSEL1_2;
+  DAC->CR |= DAC_CR_EN1;
+  DAC1_Write(128);
+}
+
+static void DAC1_Write(uint8_t value)
+{
+  DAC->DHR8R1 = value;
+  DAC->SWTRIGR = DAC_SWTRIGR_SWTRIG1;
 }
 
 
