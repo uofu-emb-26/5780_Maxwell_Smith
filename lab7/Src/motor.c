@@ -53,6 +53,17 @@ void log_data(void) {
 // Sets up the entire motor drive system
 void motor_init(void) {
     log_init();
+
+    error_integral = 0;
+    duty_cycle = 0;
+    target_rpm = 0;
+    motor_speed = 0;
+    adc_value = 0;
+    error = 0;
+
+    Kp = 32;
+    Ki = 1;
+
     pwm_init();
     encoder_init();
     ADC_init();
@@ -195,7 +206,7 @@ void ADC_init(void) {
  */
 void PI_update(void) {
     __disable_irq();
-    /// TODO: calculate error signal and write to "error" variable
+    /// calculate error signal and write to "error" variable
 
     /* Hint: Remember that your calculated motor speed may not be directly in RPM!
      *       You will need to convert the target or encoder speeds to the same units.
@@ -203,20 +214,26 @@ void PI_update(void) {
      *       more resolution.
      */
 
+     const int32_t encoder_counts_per_rev = 3200;
+     const int32_t tim6_clk_hz = 8000000;
+     const int32_t tim6_psc = 11;
+     const int32_t tim6_arr = 30000;
 
-    /// TODO: Calculate integral portion of PI controller, write to "error_integral" variable
 
-    /// TODO: Clamp the value of the integral to a limited positive range
+     int16_t target_counts = (uint16_t)((target_rpm * encoder_counts_per_rev * (tim6_psc + 1) * (tim6_arr + 1)) / (60 * tim6_clk_hz));
+     error = target_rpm*2 - motor_speed;
 
-    /* Hint: The value clamp is needed to prevent excessive "windup" in the integral.
-     *       You'll read more about this for the post-lab. The exact value is arbitrary
-     *       but affects the PI tuning.
-     *       Recommend that you clamp between 0 and 3200 (what is used in the lab solution)
-     */
+    ///Calculate integral portion of PI controller, write to "error_integral" variable
+    error_integral += error;
+    ///Clamp the value of the integral to a limited positive range
+    if (error_integral < 0) {
+        error_integral = 0;
+    }
+    if (error_integral > 3200) {
+        error_integral = 3200;
+    }
 
-    /// TODO: Calculate proportional portion, add integral and write to "output" variable
-
-    int16_t output = 0; // Change this!
+    int16_t output = (Kp * error) + (Ki * error_integral);
 
     /* Because the calculated values for the PI controller are significantly larger than
      * the allowable range for duty cycle, you'll need to divide the result down into
@@ -235,8 +252,15 @@ void PI_update(void) {
      */
 
      /// TODO: Divide the output into the proper range for output adjustment
+     output >>= 5; // Divide output by 32 to fit into duty cycle range (0-100)
 
      /// TODO: Clamp the output value between 0 and 100
+     if (output < 0) {
+         output = 0;
+     }
+     if (output > 100) {
+        output = 100;
+     }
 
     pwm_setDutyCycle(output);
     duty_cycle = output;            // For debug viewing
